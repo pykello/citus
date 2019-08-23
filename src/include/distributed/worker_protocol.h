@@ -82,7 +82,6 @@ typedef struct HashPartitionContext
 	FmgrInfo *comparisonFunction;
 	ShardInterval **syntheticShardIntervalArray;
 	uint32 partitionCount;
-	Oid collation;
 	bool hasUniformHashDistribution;
 } HashPartitionContext;
 
@@ -139,7 +138,6 @@ extern List * ExecuteRemoteQuery(const char *nodeName, uint32 nodePort, char *ru
 extern List * ColumnDefinitionList(List *columnNameList, List *columnTypeList);
 extern CreateStmt * CreateStatement(RangeVar *relation, List *columnDefinitionList);
 extern CopyStmt * CopyStatement(RangeVar *relation, char *sourceFilename);
-extern Datum CompareCall2(FmgrInfo *funcInfo, Datum leftArgument, Datum rightArgument);
 
 /* Function declaration for parsing tree node */
 extern Node * ParseTreeNode(const char *ddlCommand);
