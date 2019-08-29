@@ -79,7 +79,7 @@ SELECT unnest(master_metadata_snapshot()) order by 1;
  ALTER TABLE public.mx_test_table ADD CONSTRAINT mx_test_table_col_1_key UNIQUE (col_1)
  ALTER TABLE public.mx_test_table OWNER TO postgres
  ALTER TABLE public.mx_test_table OWNER TO postgres
- CREATE INDEX mx_index ON public.mx_test_table USING btree (col_2) TABLESPACE pg_default
+ CREATE INDEX mx_index ON public.mx_test_table USING btree (col_2)
  CREATE TABLE public.mx_test_table (col_1 integer, col_2 text NOT NULL, col_3 bigint DEFAULT nextval('public.mx_test_table_col_3_seq'::regclass) NOT NULL)
  INSERT INTO pg_dist_node (nodeid, groupid, nodename, nodeport, noderack, hasmetadata, metadatasynced, isactive, noderole, nodecluster) VALUES (1, 1, 'localhost', 57637, 'default', FALSE, FALSE, TRUE, 'primary'::noderole, 'default'),(2, 2, 'localhost', 57638, 'default', FALSE, FALSE, TRUE, 'primary'::noderole, 'default')
  INSERT INTO pg_dist_partition (logicalrelid, partmethod, partkey, colocationid, repmodel) VALUES ('public.mx_test_table'::regclass, 'h', column_name_to_column('public.mx_test_table','col_1'), 0, 's')
@@ -103,7 +103,7 @@ SELECT unnest(master_metadata_snapshot()) order by 1;
  ALTER TABLE mx_testing_schema.mx_test_table ADD CONSTRAINT mx_test_table_col_1_key UNIQUE (col_1)
  ALTER TABLE mx_testing_schema.mx_test_table OWNER TO postgres
  ALTER TABLE mx_testing_schema.mx_test_table OWNER TO postgres
- CREATE INDEX mx_index ON mx_testing_schema.mx_test_table USING btree (col_2) TABLESPACE pg_default
+ CREATE INDEX mx_index ON mx_testing_schema.mx_test_table USING btree (col_2)
  CREATE TABLE mx_testing_schema.mx_test_table (col_1 integer, col_2 text NOT NULL, col_3 bigint DEFAULT nextval('mx_testing_schema.mx_test_table_col_3_seq'::regclass) NOT NULL)
  INSERT INTO pg_dist_node (nodeid, groupid, nodename, nodeport, noderack, hasmetadata, metadatasynced, isactive, noderole, nodecluster) VALUES (1, 1, 'localhost', 57637, 'default', FALSE, FALSE, TRUE, 'primary'::noderole, 'default'),(2, 2, 'localhost', 57638, 'default', FALSE, FALSE, TRUE, 'primary'::noderole, 'default')
  INSERT INTO pg_dist_partition (logicalrelid, partmethod, partkey, colocationid, repmodel) VALUES ('mx_testing_schema.mx_test_table'::regclass, 'h', column_name_to_column('mx_testing_schema.mx_test_table','col_1'), 0, 's')
@@ -131,7 +131,7 @@ SELECT unnest(master_metadata_snapshot()) order by 1;
  ALTER TABLE mx_testing_schema.mx_test_table ADD CONSTRAINT mx_test_table_col_1_key UNIQUE (col_1)
  ALTER TABLE mx_testing_schema.mx_test_table OWNER TO postgres
  ALTER TABLE mx_testing_schema.mx_test_table OWNER TO postgres
- CREATE INDEX mx_index ON mx_testing_schema.mx_test_table USING btree (col_2) TABLESPACE pg_default
+ CREATE INDEX mx_index ON mx_testing_schema.mx_test_table USING btree (col_2)
  CREATE TABLE mx_testing_schema.mx_test_table (col_1 integer, col_2 text NOT NULL, col_3 bigint DEFAULT nextval('mx_testing_schema.mx_test_table_col_3_seq'::regclass) NOT NULL)
  INSERT INTO pg_dist_node (nodeid, groupid, nodename, nodeport, noderack, hasmetadata, metadatasynced, isactive, noderole, nodecluster) VALUES (1, 1, 'localhost', 57637, 'default', FALSE, FALSE, TRUE, 'primary'::noderole, 'default'),(2, 2, 'localhost', 57638, 'default', FALSE, FALSE, TRUE, 'primary'::noderole, 'default')
  INSERT INTO pg_dist_partition (logicalrelid, partmethod, partkey, colocationid, repmodel) VALUES ('mx_testing_schema.mx_test_table'::regclass, 'h', column_name_to_column('mx_testing_schema.mx_test_table','col_1'), 0, 's')
@@ -152,7 +152,7 @@ SELECT unnest(master_metadata_snapshot()) order by 1;
  ALTER TABLE mx_testing_schema.mx_test_table ADD CONSTRAINT mx_test_table_col_1_key UNIQUE (col_1)
  ALTER TABLE mx_testing_schema.mx_test_table OWNER TO postgres
  ALTER TABLE mx_testing_schema.mx_test_table OWNER TO postgres
- CREATE INDEX mx_index ON mx_testing_schema.mx_test_table USING btree (col_2) TABLESPACE pg_default
+ CREATE INDEX mx_index ON mx_testing_schema.mx_test_table USING btree (col_2)
  CREATE TABLE mx_testing_schema.mx_test_table (col_1 integer, col_2 text NOT NULL, col_3 bigint DEFAULT nextval('mx_testing_schema.mx_test_table_col_3_seq'::regclass) NOT NULL)
  INSERT INTO pg_dist_node (nodeid, groupid, nodename, nodeport, noderack, hasmetadata, metadatasynced, isactive, noderole, nodecluster) VALUES (1, 1, 'localhost', 57637, 'default', FALSE, FALSE, TRUE, 'primary'::noderole, 'default'),(2, 2, 'localhost', 57638, 'default', FALSE, FALSE, TRUE, 'primary'::noderole, 'default')
  INSERT INTO pg_dist_partition (logicalrelid, partmethod, partkey, colocationid, repmodel) VALUES ('mx_testing_schema.mx_test_table'::regclass, 'h', column_name_to_column('mx_testing_schema.mx_test_table','col_1'), 0, 's')
@@ -297,8 +297,8 @@ SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
 
 -- Check that pg_dist_colocation is not synced
 SELECT * FROM pg_dist_colocation ORDER BY colocationid;
- colocationid | shardcount | replicationfactor | distributioncolumntype 
---------------+------------+-------------------+------------------------
+ colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation 
+--------------+------------+-------------------+------------------------+-----------------------------
 (0 rows)
 
 -- Make sure that truncate trigger has been set for the MX table on worker
@@ -340,9 +340,9 @@ SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 -- Check that foreign key metadata exists on the worker
 \c - - - :worker_1_port
 SELECT "Constraint", "Definition" FROM table_fkeys WHERE relid='mx_testing_schema_2.fk_test_2'::regclass;
-     Constraint      |                                 Definition                                  
----------------------+-----------------------------------------------------------------------------
- fk_test_2_col1_fkey | FOREIGN KEY (col1, col2) REFERENCES mx_testing_schema.fk_test_1(col1, col3)
+        Constraint        |                                 Definition                                  
+--------------------------+-----------------------------------------------------------------------------
+ fk_test_2_col1_col2_fkey | FOREIGN KEY (col1, col2) REFERENCES mx_testing_schema.fk_test_1(col1, col3)
 (1 row)
 
 \c - - - :master_port

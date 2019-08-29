@@ -1298,7 +1298,7 @@ UpdateColocationGroupReplicationFactorForReferenceTables(int replicationFactor)
 	SysScanDesc scanDescriptor = NULL;
 	ScanKeyData scanKey[1];
 	int scanKeyCount = 1;
-	bool indexOK = false;
+	bool indexOK = true;
 	HeapTuple heapTuple = NULL;
 	TupleDesc tupleDescriptor = NULL;
 
@@ -1312,8 +1312,7 @@ UpdateColocationGroupReplicationFactorForReferenceTables(int replicationFactor)
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_colocation_distributioncolumntype,
 				BTEqualStrategyNumber, F_OIDEQ, ObjectIdGetDatum(InvalidOid));
 
-	scanDescriptor = systable_beginscan(pgDistColocation,
-										InvalidOid, indexOK,
+	scanDescriptor = systable_beginscan(pgDistColocation, InvalidOid, indexOK,
 										NULL, scanKeyCount, scanKey);
 
 	heapTuple = systable_getnext(scanDescriptor);

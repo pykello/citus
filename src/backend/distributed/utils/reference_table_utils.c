@@ -393,13 +393,16 @@ CreateReferenceTableColocationId()
 	int shardCount = 1;
 	int replicationFactor = list_length(workerNodeList);
 	Oid distributionColumnType = InvalidOid;
+	Oid distributionColumnCollation = InvalidOid;
 
 	/* check for existing colocations */
-	colocationId = ColocationId(shardCount, replicationFactor, distributionColumnType);
+	colocationId = ColocationId(shardCount, replicationFactor,
+								distributionColumnType, distributionColumnCollation);
 	if (colocationId == INVALID_COLOCATION_ID)
 	{
 		colocationId = CreateColocationGroup(shardCount, replicationFactor,
-											 distributionColumnType);
+											 distributionColumnType,
+											 distributionColumnCollation);
 	}
 
 	return colocationId;
