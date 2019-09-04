@@ -467,10 +467,10 @@ ORDER BY colocationid, logicalrelid;
  mx_ddl_table                                           |            3 |           4 | h          | s
  app_analytics_events_mx                                |            3 |           4 | h          | s
  company_employees_mx                                   |            3 |           4 | h          | s
- customer_mx                                            |            4 |           1 | n          | t
- nation_mx                                              |            4 |           1 | n          | t
- part_mx                                                |            4 |           1 | n          | t
- supplier_mx                                            |            4 |           1 | n          | t
+ customer_mx                                            |            5 |           1 | n          | t
+ nation_mx                                              |            5 |           1 | n          | t
+ part_mx                                                |            5 |           1 | n          | t
+ supplier_mx                                            |            5 |           1 | n          | t
  nation_hash                                            |      1390000 |          16 | h          | s
  citus_mx_test_schema.nation_hash                       |      1390000 |          16 | h          | s
  lineitem_mx                                            |      1390001 |          16 | h          | s
