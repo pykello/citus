@@ -157,6 +157,7 @@ extern Oid DistPlacementRelationId(void);
 extern Oid DistNodeRelationId(void);
 extern Oid DistLocalGroupIdRelationId(void);
 extern Oid DistObjectRelationId(void);
+extern Oid DistEnabledCustomAggregatesId(void);
 
 /* index oids */
 extern Oid DistNodeNodeIdIndexId(void);
