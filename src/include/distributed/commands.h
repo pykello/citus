@@ -17,11 +17,17 @@
 
 #include "utils/rel.h"
 #include "nodes/parsenodes.h"
+#include "tcop/dest.h"
 
 
 /* cluster.c - forward declarations */
 extern List * PlanClusterStmt(ClusterStmt *clusterStmt, const char *clusterCommand);
 
+#if PG_VERSION_NUM >= 110000
+
+/* call.c */
+extern bool CallDistributedProcedureRemotely(CallStmt *callStmt, DestReceiver *dest);
+#endif /* PG_VERSION_NUM >= 110000 */
 
 /* extension.c - forward declarations */
 extern bool IsCitusExtensionStmt(Node *parsetree);
