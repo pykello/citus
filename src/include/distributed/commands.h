@@ -29,6 +29,13 @@ extern List * PlanClusterStmt(ClusterStmt *clusterStmt, const char *clusterComma
 extern bool CallDistributedProcedureRemotely(CallStmt *callStmt, DestReceiver *dest);
 #endif /* PG_VERSION_NUM >= 110000 */
 
+/* collation.c - forward declarations */
+extern List * CreateCollationDDLCommand(Oid collationId);
+extern ObjectAddress AlterCollationOwnerObjectAddress(AlterOwnerStmt *stmt);
+extern List * PlanDropCollationStmt(DropStmt *stmt);
+extern List * PlanAlterCollationOwnerStmt(AlterOwnerStmt *stmt, const char *queryString);
+extern List * PlanRenameCollationStmt(RenameStmt *stmt, const char *queryString);
+
 /* extension.c - forward declarations */
 extern bool IsCitusExtensionStmt(Node *parsetree);
 extern void ErrorIfUnstableCreateOrAlterExtensionStmt(Node *parsetree);
