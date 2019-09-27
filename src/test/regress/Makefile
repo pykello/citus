@@ -15,6 +15,11 @@ endif
 MAKEFILE_DIR := $(dir $(realpath $(firstword $(MAKEFILE_LIST))))
 export PATH := $(MAKEFILE_DIR)/bin:$(PATH)
 
+SPECS_DIR := $(citus_abs_srcdir)/specs
+## Prepend common mx for isolation tests
+
+SHELL_RES := $(shell $(SPECS_DIR)/prepend_mx_common.py $(SPECS_DIR) )
+
 ##
 ## Citus regression support
 ##
