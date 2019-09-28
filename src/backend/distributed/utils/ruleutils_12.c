@@ -435,7 +435,6 @@ static char *generate_function_name(Oid funcid, int nargs,
 					   List *argnames, Oid *argtypes,
 					   bool has_variadic, bool *use_variadic_p,
 					   ParseExprKind special_exprkind);
-static char *generate_operator_name(Oid operid, Oid arg1, Oid arg2);
 
 #define only_marker(rte)  ((rte)->inh ? "" : "ONLY ")
 

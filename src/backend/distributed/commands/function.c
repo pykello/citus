@@ -24,10 +24,12 @@
 #endif
 #include "access/htup_details.h"
 #include "access/xact.h"
+#include "catalog/pg_aggregate.h"
 #include "catalog/namespace.h"
 #include "catalog/pg_proc.h"
 #include "catalog/pg_type.h"
 #include "commands/extension.h"
+#include "distributed/citus_ruleutils.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
@@ -54,6 +56,7 @@
 	(strncmp(arg, prefix, strlen(prefix)) == 0)
 
 /* forward declaration for helper functions*/
+static char * GetAggregateDDLCommand(const RegProcedure funcOid);
 static char * GetFunctionDDLCommand(const RegProcedure funcOid);
 static char * GetFunctionAlterOwnerCommand(const RegProcedure funcOid);
 static int GetDistributionArgIndex(Oid functionOid, char *distributionArgumentName,
@@ -542,7 +545,6 @@ GetFunctionDDLCommand(const RegProcedure funcOid)
 	StringInfo ddlCommand = makeStringInfo();
 
 	OverrideSearchPath *overridePath = NULL;
-	Datum sqlTextDatum = 0;
 	char *createFunctionSQL = NULL;
 	char *alterFunctionOwnerSQL = NULL;
 
@@ -556,13 +558,18 @@ GetFunctionDDLCommand(const RegProcedure funcOid)
 	overridePath->addCatalog = true;
 	PushOverrideSearchPath(overridePath);
 
-	sqlTextDatum = DirectFunctionCall1(pg_get_functiondef,
-									   ObjectIdGetDatum(funcOid));
+	createFunctionSQL = GetAggregateDDLCommand(funcOid);
+
+	if (createFunctionSQL == NULL)
+	{
+		Datum sqlTextDatum = DirectFunctionCall1(pg_get_functiondef,
+												 ObjectIdGetDatum(funcOid));
+		createFunctionSQL = TextDatumGetCString(sqlTextDatum);
+	}
 
 	/* revert back to original search_path */
 	PopOverrideSearchPath();
 
-	createFunctionSQL = TextDatumGetCString(sqlTextDatum);
 	alterFunctionOwnerSQL = GetFunctionAlterOwnerCommand(funcOid);
 
 	appendStringInfo(ddlCommand, "%s;%s", createFunctionSQL, alterFunctionOwnerSQL);
@@ -580,7 +587,7 @@ GetFunctionAlterOwnerCommand(const RegProcedure funcOid)
 {
 	HeapTuple proctup = SearchSysCache1(PROCOID, ObjectIdGetDatum(funcOid));
 	StringInfo alterCommand = makeStringInfo();
-	bool isProcedure = false;
+	char *kindString = "FUNCTION";
 	Oid procOwner = InvalidOid;
 
 	char *functionSignature = NULL;
@@ -598,7 +605,13 @@ GetFunctionAlterOwnerCommand(const RegProcedure funcOid)
 		procOwner = procform->proowner;
 
 #if (PG_VERSION_NUM >= 110000)
-		isProcedure = procform->prokind == PROKIND_PROCEDURE;
+		if (procform->prokind == PROKIND_PROCEDURE)
+		{
+			kindString = "PROCEDURE";
+		} else if (procform->prokind == PROKIND_AGGREGATE)
+		{
+			kindString = "AGGREGATE";
+		}
 #endif
 
 		ReleaseSysCache(proctup);
@@ -635,11 +648,227 @@ GetFunctionAlterOwnerCommand(const RegProcedure funcOid)
 	functionOwner = GetUserNameFromId(procOwner, false);
 
 	appendStringInfo(alterCommand, "ALTER %s %s OWNER TO %s;",
-					 (isProcedure ? "PROCEDURE" : "FUNCTION"),
+					 kindString,
 					 functionSignature,
 					 quote_identifier(functionOwner));
 
 	return alterCommand->data;
+}
+
+
+/*
+ * GetAggregateDDLCommand returns a string for creating an aggregate.
+ * Returns NULL if funcOid is not an aggregate.
+ */
+static char *
+GetAggregateDDLCommand(const RegProcedure funcOid)
+{
+	StringInfoData buf;
+	HeapTuple proctup = NULL;
+	Form_pg_proc proc = NULL;
+	HeapTuple aggtup = NULL;
+	Form_pg_aggregate agg = NULL;
+	const char *name = NULL;
+	const char *nsp = NULL;
+	int numargs = 0;
+	int i = 0;
+	Oid *argtypes = NULL;
+	char **argnames = NULL;
+	char *argmodes = NULL;
+	char *result = NULL;
+	int insertorderbyat = -1;
+	int argsprinted = 0;
+	int inputargno = 0;
+
+	proctup = SearchSysCache1(PROCOID, funcOid);
+	if (!HeapTupleIsValid(proctup))
+	{
+		goto early_exit;
+	}
+
+	proc = (Form_pg_proc) GETSTRUCT(proctup);
+
+	if (proc->prokind != PROKIND_AGGREGATE)
+	{
+		goto early_exit;
+	}
+
+	initStringInfo(&buf);
+
+	name = NameStr(proc->proname);
+	nsp = get_namespace_name(proc->pronamespace);
+
+	/* pg12 introduced CREATE OR REPLACE AGGREGATE */
+#if PG_VERSION_NUM >= 120000
+	appendStringInfo(&buf, "CREATE OR REPLACE AGGREGATE %s(",
+					 quote_qualified_identifier(nsp, name));
+#else
+
+	/* TODO escape $$ */
+	appendStringInfo(&buf, "DO $$ CREATE AGGREGATE %s(",
+					 quote_qualified_identifier(nsp, name));
+#endif
+
+	/* Parameters, orrows heavily from print_function_arguments in postgres */
+	numargs = get_func_arg_info(proctup, &argtypes, &argnames, &argmodes);
+
+	aggtup = SearchSysCache1(AGGFNOID, funcOid);
+	if (!HeapTupleIsValid(aggtup))
+	{
+		goto early_exit;
+	}
+	agg = (Form_pg_aggregate) GETSTRUCT(aggtup);
+
+	if (AGGKIND_IS_ORDERED_SET(agg->aggkind))
+	{
+		insertorderbyat = agg->aggnumdirectargs;
+	}
+
+	for (i = 0; i < numargs; i++)
+	{
+		Oid argtype = argtypes[i];
+		char *argname = argnames ? argnames[i] : NULL;
+		char argmode = argmodes ? argmodes[i] : PROARGMODE_IN;
+		const char *modename;
+		bool isinput;
+
+		switch (argmode)
+		{
+			case PROARGMODE_IN:
+			{
+				modename = "";
+				isinput = true;
+				break;
+			}
+
+			case PROARGMODE_VARIADIC:
+			{
+				modename = "VARIADIC ";
+				isinput = true;
+				break;
+			}
+
+			default:
+			{
+				elog(ERROR, "unexpected parameter mode '%c'", argmode);
+				modename = NULL;
+				isinput = false;
+				break;
+			}
+		}
+
+		if (isinput)
+		{
+			inputargno++;       /* this is a 1-based counter */
+		}
+		if (argsprinted == insertorderbyat)
+		{
+			appendStringInfoString(&buf, " ORDER BY");
+		}
+		else if (argsprinted)
+		{
+			appendStringInfoString(&buf, ", ");
+		}
+
+		appendStringInfoString(&buf, modename);
+
+		if (argname && argname[0])
+		{
+			appendStringInfo(&buf, "%s ", quote_identifier(argname));
+		}
+
+		appendStringInfoString(&buf, format_type_be(argtype));
+
+		argsprinted++;
+
+		/* nasty hack: print the last arg twice for variadic ordered-set agg */
+		if (argsprinted == insertorderbyat && i == numargs - 1)
+		{
+			i--;
+		}
+	}
+
+	appendStringInfoString(&buf, ") (");
+
+	/* qualify func with get_func_namespace? */
+	appendStringInfo(&buf, "STYPE = %s,SFUNC = %s",
+					 format_type_be_qualified(agg->aggtranstype),
+					 get_func_name(agg->aggtransfn)
+					 );
+
+	if (agg->aggtransspace != 0)
+	{
+		appendStringInfo(&buf, ", SSPACE = %d", agg->aggtransspace);
+	}
+
+	if (agg->aggfinalfn != InvalidOid)
+	{
+		appendStringInfo(&buf, ", FINALFUNC = %s",
+						 get_func_name(agg->aggfinalfn)
+						 );
+	}
+
+	if (agg->aggfinalextra)
+	{
+		appendStringInfoString(&buf, ", FINALFUNC_EXTRA");
+	}
+
+	if (agg->aggmtransspace != 0)
+	{
+		appendStringInfo(&buf, ", MSSPACE = %d", agg->aggmtransspace);
+	}
+
+	if (agg->aggmfinalextra)
+	{
+		appendStringInfoString(&buf, ", MFINALFUNC_EXTRA");
+	}
+
+	if (agg->aggsortop != InvalidOid)
+	{
+		appendStringInfo(&buf, ", SORTOP = %s",
+						 generate_operator_name(agg->aggsortop, argtypes[0],
+												argtypes[0]));
+	}
+
+	if (agg->aggkind == AGGKIND_HYPOTHETICAL)
+	{
+		appendStringInfoString(&buf, ", HYPOTHETICAL");
+	}
+
+	/*
+	 * BOTH:
+	 * [ , FINALFUNC_MODIFY = { READ_ONLY | SHAREABLE | READ_WRITE } ]
+	 * [ , INITCOND = initial_condition ]
+	 * [ , PARALLEL = { SAFE | RESTRICTED | UNSAFE } ]
+	 *
+	 */
+
+	/*
+	 * WITHOUT orderby:
+	 * [ , COMBINEFUNC = combinefunc ]
+	 * [ , SERIALFUNC = serialfunc ]
+	 * [ , DESERIALFUNC = deserialfunc ]
+	 * [ , MSFUNC = msfunc ]
+	 * [ , MINVFUNC = minvfunc ]
+	 * [ , MSTYPE = mstate_data_type ]
+	 * [ , MFINALFUNC = mffunc ]
+	 * [ , MFINALFUNC_EXTRA ]
+	 * [ , MFINALFUNC_MODIFY = { READ_ONLY | SHAREABLE | READ_WRITE } ]
+	 * [ , MINITCOND = minitial_condition ]
+	 */
+
+	appendStringInfoChar(&buf, ')');
+
+early_exit:
+	if (aggtup)
+	{
+		ReleaseSysCache(aggtup);
+	}
+	if (proctup)
+	{
+		ReleaseSysCache(proctup);
+	}
+	return result;
 }
 
 
