@@ -429,6 +429,7 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 #if PG_VERSION_NUM >= 110000
 				case OBJECT_PROCEDURE:
 #endif
+				case OBJECT_AGGREGATE:
 				case OBJECT_FUNCTION:
 				{
 					ddlJobs = PlanDropFunctionStmt(dropStatement, queryString);
@@ -487,6 +488,7 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 #if PG_VERSION_NUM >= 110000
 				case OBJECT_PROCEDURE:
 #endif
+				case OBJECT_AGGREGATE:
 				case OBJECT_FUNCTION:
 				{
 					ddlJobs = PlanRenameFunctionStmt(renameStmt, queryString);
@@ -846,6 +848,7 @@ PlanAlterOwnerStmt(AlterOwnerStmt *stmt, const char *queryString)
 #if PG_VERSION_NUM >= 110000
 		case OBJECT_PROCEDURE:
 #endif
+		case OBJECT_AGGREGATE:
 		case OBJECT_FUNCTION:
 		{
 			return PlanAlterFunctionOwnerStmt(stmt, queryString);

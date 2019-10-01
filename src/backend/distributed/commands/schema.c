@@ -124,6 +124,7 @@ PlanAlterObjectSchemaStmt(AlterObjectSchemaStmt *stmt, const char *queryString)
 #if PG_VERSION_NUM >= 110000
 		case OBJECT_PROCEDURE:
 #endif
+		case OBJECT_AGGREGATE:
 		case OBJECT_FUNCTION:
 		{
 			return PlanAlterFunctionSchemaStmt(stmt, queryString);
@@ -201,6 +202,7 @@ ProcessAlterObjectSchemaStmt(AlterObjectSchemaStmt *stmt, const char *queryStrin
 #if PG_VERSION_NUM >= 110000
 		case OBJECT_PROCEDURE:
 #endif
+		case OBJECT_AGGREGATE:
 		case OBJECT_FUNCTION:
 		{
 			ProcessAlterFunctionSchemaStmt(stmt, queryString);

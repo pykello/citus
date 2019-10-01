@@ -123,6 +123,7 @@ DeparseDropStmt(DropStmt *stmt)
 #if PG_VERSION_NUM >= 110000
 		case OBJECT_PROCEDURE:
 #endif
+		case OBJECT_AGGREGATE:
 		case OBJECT_FUNCTION:
 		{
 			return DeparseDropFunctionStmt(stmt);
@@ -191,6 +192,7 @@ DeparseRenameStmt(RenameStmt *stmt)
 #if PG_VERSION_NUM >= 110000
 		case OBJECT_PROCEDURE:
 #endif
+		case OBJECT_AGGREGATE:
 		case OBJECT_FUNCTION:
 		{
 			return DeparseRenameFunctionStmt(stmt);
@@ -246,6 +248,7 @@ DeparseAlterObjectSchemaStmt(AlterObjectSchemaStmt *stmt)
 #if PG_VERSION_NUM >= 110000
 		case OBJECT_PROCEDURE:
 #endif
+		case OBJECT_AGGREGATE:
 		case OBJECT_FUNCTION:
 		{
 			return DeparseAlterFunctionSchemaStmt(stmt);
@@ -280,6 +283,7 @@ DeparseAlterOwnerStmt(AlterOwnerStmt *stmt)
 #if PG_VERSION_NUM >= 110000
 		case OBJECT_PROCEDURE:
 #endif
+		case OBJECT_AGGREGATE:
 		case OBJECT_FUNCTION:
 		{
 			return DeparseAlterFunctionOwnerStmt(stmt);
@@ -309,6 +313,7 @@ DeparseAlterObjectDependsStmt(AlterObjectDependsStmt *stmt)
 #if PG_VERSION_NUM >= 110000
 		case OBJECT_PROCEDURE:
 #endif
+		case OBJECT_AGGREGATE:
 		case OBJECT_FUNCTION:
 		{
 			return DeparseAlterFunctionDependsStmt(stmt);
