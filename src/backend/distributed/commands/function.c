@@ -664,6 +664,15 @@ static char *
 GetAggregateDDLCommand(const RegProcedure funcOid)
 {
 	StringInfoData buf;
+#if PG_VERSION_NUM < 120000
+
+	/*
+	 * CREATE OR REPLACE AGGREGATE only introduced in pg12,
+	 * so we hack around that with a DO block & exception handler.
+	 * Requires some care to pick the correct $delimiter$
+	 */
+	StringInfoData resultbuf;
+#endif
 	HeapTuple proctup = NULL;
 	Form_pg_proc proc = NULL;
 	HeapTuple aggtup = NULL;
@@ -675,7 +684,6 @@ GetAggregateDDLCommand(const RegProcedure funcOid)
 	Oid *argtypes = NULL;
 	char **argnames = NULL;
 	char *argmodes = NULL;
-	char *result = NULL;
 	int insertorderbyat = -1;
 	int argsprinted = 0;
 	int inputargno = 0;
@@ -698,14 +706,11 @@ GetAggregateDDLCommand(const RegProcedure funcOid)
 	name = NameStr(proc->proname);
 	nsp = get_namespace_name(proc->pronamespace);
 
-	/* pg12 introduced CREATE OR REPLACE AGGREGATE */
 #if PG_VERSION_NUM >= 120000
 	appendStringInfo(&buf, "CREATE OR REPLACE AGGREGATE %s(",
 					 quote_qualified_identifier(nsp, name));
 #else
-
-	/* TODO escape $$ */
-	appendStringInfo(&buf, "DO $$ CREATE AGGREGATE %s(",
+	appendStringInfo(&buf, "CREATE AGGREGATE %s(",
 					 quote_qualified_identifier(nsp, name));
 #endif
 
@@ -924,27 +929,96 @@ GetAggregateDDLCommand(const RegProcedure funcOid)
 												argtypes[0]));
 	}
 
+	{
+		const char *parallelstring = NULL;
+		switch (proc->proparallel)
+		{
+			case PROPARALLEL_SAFE:
+			{
+				parallelstring = "SAFE";
+				break;
+			}
+
+			case PROPARALLEL_RESTRICTED:
+			{
+				parallelstring = "RESTRICTED";
+				break;
+			}
+
+			case PROPARALLEL_UNSAFE:
+			{
+				break;
+			}
+
+			default:
+				elog(WARNING, "Unknown parallel option, ignoring: %c", proc->proparallel);
+		}
+
+		if (parallelstring != NULL)
+		{
+			appendStringInfo(&buf, ", PARALLEL = %s", parallelstring);
+		}
+	}
+
+	{
+		bool isNull = false;
+		Datum textInitVal = SysCacheGetAttr(AGGFNOID, aggtup,
+											Anum_pg_aggregate_agginitval,
+											&isNull);
+		if (!isNull)
+		{
+			char *strInitVal = TextDatumGetCString(textInitVal);
+			char *strInitValQuoted = quote_literal_cstr(strInitVal);
+
+			appendStringInfo(&buf, ", INITCOND = %s", strInitValQuoted);
+
+			pfree(strInitValQuoted);
+			pfree(strInitVal);
+		}
+	}
+
+	{
+		bool isNull = false;
+		Datum textInitVal = SysCacheGetAttr(AGGFNOID, aggtup,
+											Anum_pg_aggregate_aggminitval,
+											&isNull);
+		if (!isNull)
+		{
+			char *strInitVal = TextDatumGetCString(textInitVal);
+			char *strInitValQuoted = quote_literal_cstr(strInitVal);
+
+			appendStringInfo(&buf, ", MINITCOND = %s", strInitValQuoted);
+
+			pfree(strInitValQuoted);
+			pfree(strInitVal);
+		}
+	}
+
 	if (agg->aggkind == AGGKIND_HYPOTHETICAL)
 	{
 		appendStringInfoString(&buf, ", HYPOTHETICAL");
 	}
 
-	/*
-	 * BOTH:
-	 * [ , INITCOND = initial_condition ]
-	 * [ , PARALLEL = { SAFE | RESTRICTED | UNSAFE } ]
-	 *
-	 */
-
-	/*
-	 * WITHOUT orderby:
-	 * [ , MINITCOND = minitial_condition ]
-	 */
-
-#if PG_VERSION_NUM >= 120000
 	appendStringInfoChar(&buf, ')');
-#else
-	appendStringInfoString(&buf, ");EXCEPTION WHEN duplicate_function THEN NULL;END $$;");
+
+#if PG_VERSION_NUM < 120000
+	{
+		/* construct a dollar quoted string, making sure the quoted text doesn't contain the dollar quote */
+		StringInfoData delim;
+		initStringInfo(&delim);
+		appendStringInfoChar(&delim, '$');
+		while (strstr(buf.data, delim.data) != NULL)
+		{
+			appendStringInfoChar(&delim, 'z');
+		}
+
+		appendStringInfo(&resultbuf,
+						 "DO %s$%s;EXCEPTION WHEN duplicate_function THEN NULL;END%s$",
+						 delim.data,
+						 buf.data, delim.data);
+		pfree(delim.data);
+		pfree(buf.data);
+	}
 #endif
 
 early_exit:
@@ -956,7 +1030,11 @@ early_exit:
 	{
 		ReleaseSysCache(proctup);
 	}
-	return result;
+#if PG_VERSION_NUM >= 120000
+	return buf.data;
+#else
+	return resultbuf.data;
+#endif
 }
 
 
