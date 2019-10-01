@@ -803,14 +803,39 @@ GetAggregateDDLCommand(const RegProcedure funcOid)
 
 	if (agg->aggfinalfn != InvalidOid)
 	{
-		appendStringInfo(&buf, ", FINALFUNC = %s",
-						 get_func_name(agg->aggfinalfn)
-						 );
-	}
+		const char *finalmodifystring = NULL;
+		switch (agg->aggfinalmodify)
+		{
+			case AGGMODIFY_READ_ONLY:
+			{
+				finalmodifystring = "READ_ONLY";
+				break;
+			}
 
-	if (agg->aggfinalextra)
-	{
-		appendStringInfoString(&buf, ", FINALFUNC_EXTRA");
+			case AGGMODIFY_SHAREABLE:
+			{
+				finalmodifystring = "SHAREABLE";
+				break;
+			}
+
+			case AGGMODIFY_READ_WRITE:
+			{
+				finalmodifystring = "READ_WRITE";
+				break;
+			}
+		}
+
+		appendStringInfo(&buf, ", FINALFUNC = %s", get_func_name(agg->aggfinalfn));
+
+		if (finalmodifystring != NULL)
+		{
+			appendStringInfo(&buf, ", FINALFUNC_MODIFY = %s", finalmodifystring);
+		}
+
+		if (agg->aggfinalextra)
+		{
+			appendStringInfoString(&buf, ", FINALFUNC_EXTRA");
+		}
 	}
 
 	if (agg->aggmtransspace != 0)
@@ -818,9 +843,78 @@ GetAggregateDDLCommand(const RegProcedure funcOid)
 		appendStringInfo(&buf, ", MSSPACE = %d", agg->aggmtransspace);
 	}
 
-	if (agg->aggmfinalextra)
+	if (agg->aggmfinalfn)
 	{
-		appendStringInfoString(&buf, ", MFINALFUNC_EXTRA");
+		const char *mfinalmodifystring = NULL;
+		switch (agg->aggfinalmodify)
+		{
+			case AGGMODIFY_READ_ONLY:
+			{
+				mfinalmodifystring = "READ_ONLY";
+				break;
+			}
+
+			case AGGMODIFY_SHAREABLE:
+			{
+				mfinalmodifystring = "SHAREABLE";
+				break;
+			}
+
+			case AGGMODIFY_READ_WRITE:
+			{
+				mfinalmodifystring = "READ_WRITE";
+				break;
+			}
+		}
+
+		appendStringInfo(&buf, ", MFINALFUNC = %s", get_func_name(agg->aggmfinalfn));
+
+		if (mfinalmodifystring != NULL)
+		{
+			appendStringInfo(&buf, ", MFINALFUNC_MODIFY = %s", mfinalmodifystring);
+		}
+
+		if (agg->aggmfinalextra)
+		{
+			appendStringInfoString(&buf, ", MFINALFUNC_EXTRA");
+		}
+	}
+
+	if (agg->aggmtransfn)
+	{
+		appendStringInfo(&buf, ", MSFUNC = %s", get_func_name(agg->aggmtransfn));
+
+		if (agg->aggmtranstype)
+		{
+			appendStringInfo(&buf, ", MSTYPE = %s",
+							 format_type_be_qualified(agg->aggmtranstype),
+							 get_func_name(agg->aggmtransfn));
+		}
+	}
+
+	if (agg->aggtransspace != 0)
+	{
+		appendStringInfo(&buf, ", SSPACE = %d", agg->aggtransspace);
+	}
+
+	if (agg->aggminvtransfn)
+	{
+		appendStringInfo(&buf, ", MINVFUNC = %s", get_func_name(agg->aggminvtransfn));
+	}
+
+	if (agg->aggcombinefn)
+	{
+		appendStringInfo(&buf, ", COMBINEFUNC = %s", get_func_name(agg->aggcombinefn));
+	}
+
+	if (agg->aggserialfn)
+	{
+		appendStringInfo(&buf, ", SERIALFUNC = %s", get_func_name(agg->aggserialfn));
+	}
+
+	if (agg->aggdeserialfn)
+	{
+		appendStringInfo(&buf, ", DESERIALFUNC = %s", get_func_name(agg->aggdeserialfn));
 	}
 
 	if (agg->aggsortop != InvalidOid)
@@ -837,7 +931,6 @@ GetAggregateDDLCommand(const RegProcedure funcOid)
 
 	/*
 	 * BOTH:
-	 * [ , FINALFUNC_MODIFY = { READ_ONLY | SHAREABLE | READ_WRITE } ]
 	 * [ , INITCOND = initial_condition ]
 	 * [ , PARALLEL = { SAFE | RESTRICTED | UNSAFE } ]
 	 *
@@ -845,19 +938,14 @@ GetAggregateDDLCommand(const RegProcedure funcOid)
 
 	/*
 	 * WITHOUT orderby:
-	 * [ , COMBINEFUNC = combinefunc ]
-	 * [ , SERIALFUNC = serialfunc ]
-	 * [ , DESERIALFUNC = deserialfunc ]
-	 * [ , MSFUNC = msfunc ]
-	 * [ , MINVFUNC = minvfunc ]
-	 * [ , MSTYPE = mstate_data_type ]
-	 * [ , MFINALFUNC = mffunc ]
-	 * [ , MFINALFUNC_EXTRA ]
-	 * [ , MFINALFUNC_MODIFY = { READ_ONLY | SHAREABLE | READ_WRITE } ]
 	 * [ , MINITCOND = minitial_condition ]
 	 */
 
+#if PG_VERSION_NUM >= 120000
 	appendStringInfoChar(&buf, ')');
+#else
+	appendStringInfoString(&buf, ");EXCEPTION WHEN duplicate_function THEN NULL;END $$;");
+#endif
 
 early_exit:
 	if (aggtup)
