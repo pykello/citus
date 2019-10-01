@@ -3153,7 +3153,7 @@ GetLocalGroupId(void)
 		 * Upgrade is happening. When upgrading postgres, pg_dist_local_group is
 		 * temporarily empty before citus_finish_pg_upgrade() finishes execution.
 		 */
-		groupId = GROUP_ID_UPGRADING;
+		groupId = 10;
 	}
 
 	systable_endscan(scanDescriptor);
