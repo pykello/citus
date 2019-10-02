@@ -23,6 +23,14 @@ SELECT * FROM t_ab ORDER BY b;
 SELECT * FROM t_ab WHERE b = 11;
 SELECT * FROM t_ab WHERE b = 22;
 
+-- verify that SELECT function delegation works fine
+SET client_min_messages TO DEBUG1;
+SELECT count_values(11);
+SELECT count_values(12);
+
+-- supress cascade notices
+SET client_min_messages TO ERROR;
+
 DROP TABLE t;
 
 DROP SCHEMA upgrade_distributed_table_before CASCADE;

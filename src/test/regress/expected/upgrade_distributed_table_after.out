@@ -65,9 +65,23 @@ SELECT * FROM t_ab WHERE b = 22;
  22
 (1 row)
 
+-- verify that SELECT function delegation works fine
+SET client_min_messages TO DEBUG1;
+SELECT count_values(11);
+DEBUG:  pushing down the function call
+ count_values 
+--------------
+            1
+(1 row)
+
+SELECT count_values(12);
+DEBUG:  pushing down the function call
+ count_values 
+--------------
+            0
+(1 row)
+
+-- supress cascade notices
+SET client_min_messages TO ERROR;
 DROP TABLE t;
 DROP SCHEMA upgrade_distributed_table_before CASCADE;
-NOTICE:  drop cascades to 3 other objects
-DETAIL:  drop cascades to type tc1_newname
-drop cascades to table t1
-drop cascades to table t_ab
