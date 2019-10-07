@@ -608,7 +608,8 @@ GetFunctionAlterOwnerCommand(const RegProcedure funcOid)
 		if (procform->prokind == PROKIND_PROCEDURE)
 		{
 			kindString = "PROCEDURE";
-		} else if (procform->prokind == PROKIND_AGGREGATE)
+		}
+		else if (procform->prokind == PROKIND_AGGREGATE)
 		{
 			kindString = "AGGREGATE";
 		}
@@ -885,8 +886,7 @@ GetAggregateDDLCommand(const RegProcedure funcOid)
 		if (agg->aggmtranstype)
 		{
 			appendStringInfo(&buf, ", MSTYPE = %s",
-							 format_type_be_qualified(agg->aggmtranstype),
-							 get_func_name(agg->aggmtransfn));
+							 format_type_be_qualified(agg->aggmtranstype));
 		}
 	}
 
