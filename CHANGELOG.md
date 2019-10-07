@@ -1,15 +1,26 @@
 ### citus v9.0.0 (October 7, 2019) ###
+
+* Adds support for PostgreSQL 12
+
+* Adds UDFs to help with PostgreSQL upgrades
+
+* Delegates `SELECT function()` to a worker node
+
+* Distributes types to worker nodes
+
+* Introduces `create_distributed_function` UDF
+
+* Introduces local query execution for Citus MX
+
+* Implements infrastructure for routing `CALL` to MX workers
+
 * Adds a feature flag to turn off `CREATE TYPE` propagation
 
 * Adds dist. arg. and colocation parameters to `create_distributed_function()`
 
 * Adds option `citus.single_shard_commit_protocol`
 
-* Adds PostgreSQL 12 jobs
-
 * Adds schemas when distributing sequence definitons correctly
-
-* Adds shard rebalancer stub
 
 * Adds support for `EXPLAIN SUMMARY`
 
@@ -19,25 +30,13 @@
 
 * Adds support for anon composite types on the target list in router queries
 
-* Adds support for PostgreSQL 12
-
-* Adds UDFs to help with PostgreSQL upgrades
-
 * Avoids a failed assertion when using an aggregate named `invalid`
 
 * Avoids race condition between `create_reference_table` & `master_add_node`
 
 * Avoids undefined behavior of formatting null with %s
 
-* Changes SQL migration build process for easier review
-
-* Delegates `SELECT function()` to a worker node
-
 * Disallows distributed functions for functions depending on an extension
-
-* Distributes types to worker nodes
-
-* Drops foreign key from `pg_dist_poolinfo` to `pg_dist_node`
 
 * Fixes a bug in `pg_depend_recurse`
 
@@ -50,14 +49,6 @@
 * Fixes an error message when cluster fails for task tracker
 
 * Fixes assert failure in bare `SELECT FROM reference table FOR UPDATE` in MX
-
-* Fixes sequence names in `pg_dist_node`
-
-* Implements infrastructure for routing `CALL` to MX workers
-
-* Introduces `create_distributed_function` UDF
-
-* Introduces local query execution for Citus MX
 
 * Makes `master_update_node` MX compatible
 
@@ -81,17 +72,9 @@
 
 * Records single connection relation accesses only for reference tables
 
-* Refactors a 9 argument function to use a struct
-
-* Refactors ensure schema exists to dependency exists
-
 * Removes unused functionality to check for updates
 
 * Renames remote types during type propagation
-
-* Squashes migration scripts prior to version 7
-
-* Updates Ubuntu dependencies in `CONTRIBUTING.md`
 
 * Uses 2PC in adaptive executor when dealing with replication factors above 1
 
