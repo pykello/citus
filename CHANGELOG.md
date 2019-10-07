@@ -1,100 +1,100 @@
 ### citus v9.0.0 (October 7, 2019) ###
 
-* Fix a bug that caused run_command_on_colocated_placements to fail for regular users
+* Fixes a bug that caused `run_command_on_colocated_placements` to fail
 
-* Add postgres 12 jobs
+* Adds PostgreSQL 12 jobs
 
-* Disallow distributed functions for functions depending on an extension
+* Disallows distributed functions for functions depending on an extension
 
-* Propagate CREATE OR REPLACE FUNCTION
+* Propagates `CREATE OR REPLACE FUNCTION` for distributed functions
 
-* Add explain summary suppor
+* Adds support for `EXPLAIN SUMMARY`
 
-* Propagate ALTER FUNCTION statements for distributed functions
+* Propagates `ALTER FUNCTION` statements for distributed functions
 
-* Propagate reindex on tables & index
+* Propagates `REINDEX` on tables & indexes
 
-* Delegate `SELECT function();` to a worker node.
+* Delegates `SELECT function()` to a worker node
 
-* implement infrastructure for routing `CALL` to MX workers
+* Implements infrastructure for routing `CALL` to MX workers
 
-* Fix sequence names in pg_dist_node
+* Fixes sequence names in `pg_dist_node`
 
-* Support serial and smallserial when syncing metadata
+* Adds support for `serial` and `smallserial` when syncing metadata
 
-* Fix assert failure in bare SELECT FROM reference table FOR UPDATE in MX
+* Fixes assert failure in bare `SELECT FROM reference table FOR UPDATE` in MX
 
-* Support anonymous composite types on the target list in router queries
+* Adds support for anon composite types on the target list in router queries
 
-* Add dist. arg. and colocation parameters to create_distributed_function()
+* Adds dist. arg. and colocation parameters to `create_distributed_function()`
 
-* Make master_update_node MX compatible
+* Makes `master_update_node` MX compatible
 
-* Provide a GUC to turn of the new dependency propagation functionality
+* Provides a GUC to turn of the new dependency propagation functionality
 
-* Rename remote types during type propagation
+* Renames remote types during type propagation
 
-* Add feature flag to turn off create type propagation
+* Adds a feature flag to turn off `CREATE TYPE` propagation
 
-* Introduces create_distributed_function UDF
+* Introduces `create_distributed_function` UDF
 
-* Avoid race condition between `create_reference_table` & `master_add_node`
+* Avoids race condition between `create_reference_table` & `master_add_node`
 
-* Change SQL migration build process for easier review
+* Changes SQL migration build process for easier review
 
-* Distribute Types to worker nodes
+* Distributes types to worker nodes
 
-* Correctly add schema when distributing sequence definitons
+* Adds schemas when distributing sequence definitons correctly
 
-* Refactor 9 argument function to use a struc
+* Refactors a 9 argument function to use a struct
 
-* Fix schema leak on CREATE INDEX statement
+* Fixes a schema leak on `CREATE INDEX` statement
 
-* Avoid a failed assertion when using an aggregate named `invalid`
+* Avoids a failed assertion when using an aggregate named `invalid`
 
-* Add shard rebalancer stub
+* Adds shard rebalancer stub
 
-* Introduce local query execution for Citus MX
+* Introduces local query execution for Citus MX
 
-* Drop foreign key from pg_dist_poolinfo to pg_dist_node
+* Drops foreign key from `pg_dist_poolinfo` to `pg_dist_node`
 
-* Update ubuntu dependencies in CONTRIBUTING
+* Updates Ubuntu dependencies in `CONTRIBUTING.md`
 
-* Fixes a bug that leads to various issues when a connection is los
+* Fixes a bug that leads to various issues when a connection is lost
 
-* Fix bug in pg_depend_recurse introduced in #2882
+* Fixes a bug in `pg_depend_recurse`
 
-* Support GENERATE ALWAYS AS STORED
+* Adds support for `GENERATE ALWAYS AS STORED`
 
-* Refactor ensure schema exists to dependency exists
+* Refactors ensure schema exists to dependency exists
 
-* Remove unused functionality to check for updates
+* Removes unused functionality to check for updates
 
-* Propagate column collation in create_distributed_table
+* Propagates column collation in `create_distributed_table`
 
-* Move tuplestore setup to a helper functio
+* Moves tuplestore setup to a helper function
 
-* Add support for Postgres 12
+* Adds support for PostgreSQL 12
 
-* Raise an error when reindexing a distributed table or an index of a distributed table
+* Raises an error when reindexing a distributed table or an index of said table
 
-* Fix error message when cluster fails for task tracke
+* Fixes an error message when cluster fails for task tracker
 
-* Prevent segfault in worker_partition_protocol edgecase
+* Prevents segfault in `worker_partition_protocol` edgecase
 
-* Add option `citus.single_shard_commit_protocol
+* Adds option `citus.single_shard_commit_protocol`
 
-* Prevent pg_dist_colocation from having multiple records for reference tables
+* Prevents `pg_dist_colocation` from multiple records for reference tables
 
-* Add functions to help with postgres upgrades
+* Adds UDFs to help with PostgreSQL upgrades
 
-* Record single connection relation accesses only for reference tables
+* Records single connection relation accesses only for reference tables
 
-* Use 2PC in adaptive executor when dealing with replication factors above 1
+* Uses 2PC in adaptive executor when dealing with replication factors above 1
 
-* Avoid undefined behavior of formatting null with %s
+* Avoids undefined behavior of formatting null with %s
 
-* Squash migration scripts prior to version 7
+* Squashes migration scripts prior to version 7
 
 ### citus v8.3.2 (August 09, 2019) ###
 
