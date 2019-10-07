@@ -735,21 +735,18 @@ GetAggregateDDLCommand(const RegProcedure funcOid)
 		char *argname = argnames ? argnames[i] : NULL;
 		char argmode = argmodes ? argmodes[i] : PROARGMODE_IN;
 		const char *modename;
-		bool isinput;
 
 		switch (argmode)
 		{
 			case PROARGMODE_IN:
 			{
 				modename = "";
-				isinput = true;
 				break;
 			}
 
 			case PROARGMODE_VARIADIC:
 			{
 				modename = "VARIADIC ";
-				isinput = true;
 				break;
 			}
 
@@ -757,15 +754,11 @@ GetAggregateDDLCommand(const RegProcedure funcOid)
 			{
 				elog(ERROR, "unexpected parameter mode '%c'", argmode);
 				modename = NULL;
-				isinput = false;
 				break;
 			}
 		}
 
-		if (isinput)
-		{
-			inputargno++;       /* this is a 1-based counter */
-		}
+		inputargno++;       /* this is a 1-based counter */
 		if (argsprinted == insertorderbyat)
 		{
 			appendStringInfoString(&buf, " ORDER BY");
