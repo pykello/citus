@@ -40,6 +40,10 @@ build_current() {
 build_ext() {
   citus_version="$1"
   basedir="${base}/${citus_version}"
+
+  if test -f "${base}/install-citus${citus_version}.tar"; then
+    return
+  fi
   
   mkdir -p "${basedir}"
   cd "${basedir}" || exit
