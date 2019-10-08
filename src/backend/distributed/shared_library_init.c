@@ -1272,6 +1272,16 @@ RegisterCitusConfigVariables(void)
 		GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 
+	DefineCustomBoolVariable(
+		"citus.snapshot_isolation",
+		gettext_noop("Run transactions with snapshot isolation."),
+		NULL,
+		&EnableSnapshotIsolation,
+		false,
+		PGC_SIGHUP,
+		GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
 	NormalizeWorkerListPath();
 
 

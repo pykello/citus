@@ -73,6 +73,11 @@ extern bool SelectOpensTransactionBlock;
  */
 extern bool FunctionOpensTransactionBlock;
 
+/*
+ * GUC to enable snapshot isolation.
+ */
+extern bool EnableSnapshotIsolation;
+
 /* config variable managed via guc.c */
 extern int MultiShardCommitProtocol;
 extern int SingleShardCommitProtocol;
@@ -107,6 +112,7 @@ extern void BeginOrContinueCoordinatedTransaction(void);
 extern bool InCoordinatedTransaction(void);
 extern void CoordinatedTransactionUse2PC(void);
 extern bool IsMultiStatementTransaction(void);
+extern char * DistributedSnapshotId(const char *workerName, int port);
 
 /* initialization function(s) */
 extern void InitializeTransactionManagement(void);

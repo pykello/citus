@@ -1026,6 +1026,11 @@ DistributedExecutionRequiresRollback(DistributedExecution *execution)
 		return false;
 	}
 
+	if (EnableSnapshotIsolation)
+	{
+		return true;
+	}
+
 	if (taskCount == 0)
 	{
 		return false;

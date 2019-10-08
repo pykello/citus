@@ -17,6 +17,7 @@
 
 #include "miscadmin.h"
 
+#include "access/hash.h"
 #include "access/twophase.h"
 #include "access/xact.h"
 #include "distributed/backend_data.h"
@@ -26,6 +27,7 @@
 #include "distributed/local_executor.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_shard_transaction.h"
+#include "distributed/remote_commands.h"
 #include "distributed/transaction_management.h"
 #include "distributed/placement_connection.h"
 #include "distributed/subplan_execution.h"
@@ -35,6 +37,8 @@
 #include "utils/memutils.h"
 #include "storage/fd.h"
 
+
+#define SNAPSHOT_ISOLATION_LOCK_TAG 12121212ull
 
 CoordinatedTransactionState CurrentCoordinatedTransactionState = COORD_TRANS_NONE;
 
@@ -77,12 +81,31 @@ bool CoordinatedTransactionUses2PC = false;
 /* if disabled, distributed statements in a function may run as separate transactions */
 bool FunctionOpensTransactionBlock = true;
 
+bool EnableSnapshotIsolation = false;
+
 /* stack depth of UDF calls */
 int FunctionCallLevel = 0;
 
 
+typedef struct
+{
+	char hostname[MAX_NODE_LENGTH];
+	int32 port;
+} SnapshotDataKey;
+
+typedef struct
+{
+	SnapshotDataKey key;
+	MultiConnection *connection;
+	char snapshotId[256];
+} DistibutedSnapshotData;
+
+static HTAB *snapshotHash = NULL;
+
+
 /* transaction management functions */
 static void BeginCoordinatedTransaction(void);
+static void EndCoordinatedTransaction(void);
 static void CoordinatedTransactionCallback(XactEvent event, void *arg);
 static void CoordinatedSubTransactionCallback(SubXactEvent event, SubTransactionId subId,
 											  SubTransactionId parentSubid, void *arg);
@@ -93,6 +116,21 @@ static void PushSubXact(SubTransactionId subId);
 static void PopSubXact(SubTransactionId subId);
 static void SwallowErrors(void (*func)());
 
+/* snapshot isolation functions */
+static void CreateSnapshotHash(void);
+static List * WorkerListConnections(List *workerList);
+static List * ConnectionListSnapshotIds(List *connectionList);
+static void CloseSnapshotConnections(void);
+static void AcquireSnapshotIsolationLock(void);
+static void ReleaseSnapshotIsolationLock(void);
+
+
+#define SET_LOCKTAG_INT64(tag, key64) \
+	SET_LOCKTAG_ADVISORY(tag, \
+						 MyDatabaseId, \
+						 (uint32) ((key64) >> 32), \
+						 (uint32) (key64), \
+						 1)
 
 /*
  * BeginOrContinueCoordinatedTransaction starts a coordinated transaction,
@@ -169,6 +207,201 @@ BeginCoordinatedTransaction(void)
 	CurrentCoordinatedTransactionState = COORD_TRANS_STARTED;
 
 	AssignDistributedTransactionId();
+
+	if (EnableSnapshotIsolation)
+	{
+		AcquireSnapshotIsolationLock();
+		CreateSnapshotHash();
+		ReleaseSnapshotIsolationLock();
+	}
+}
+
+
+static void
+EndCoordinatedTransaction(void)
+{
+	if (EnableSnapshotIsolation && snapshotHash)
+	{
+		CloseSnapshotConnections();
+		snapshotHash = NULL;
+	}
+}
+
+
+static void
+AcquireSnapshotIsolationLock(void)
+{
+	LOCKTAG	tag;
+	SET_LOCKTAG_INT64(tag, SNAPSHOT_ISOLATION_LOCK_TAG);
+	LockAcquire(&tag, ExclusiveLock, true, false);
+}
+
+static void
+ReleaseSnapshotIsolationLock(void)
+{
+	LOCKTAG	tag;
+	SET_LOCKTAG_INT64(tag, SNAPSHOT_ISOLATION_LOCK_TAG);
+	LockRelease(&tag, ExclusiveLock, true);
+}
+
+
+static uint32
+SnapshotDataKeyHash(const void *key, Size keysize)
+{
+	const SnapshotDataKey *entry = key;
+	uint32 hash = 0;
+
+	hash = string_hash(entry->hostname, NAMEDATALEN);
+	hash = hash_combine(hash, hash_uint32(entry->port));
+
+	return hash;
+}
+
+
+static void
+CreateSnapshotHash(void)
+{
+	int hashFlags = 0;
+	HASHCTL info;
+	List *workerList = ActivePrimaryNodeList(AccessShareLock);
+	ListCell *workerCell = NULL;
+	ListCell *connectionCell = NULL;
+	ListCell *snapshotIdCell = NULL;
+
+	List *connectionList = WorkerListConnections(workerList);
+	List *snapshotIdList = ConnectionListSnapshotIds(connectionList);
+
+	memset(&info, 0, sizeof(info));
+	info.keysize = sizeof(SnapshotDataKey);
+	info.entrysize = sizeof(DistibutedSnapshotData);
+	info.match = WorkerNodeCompare;
+	info.hash = SnapshotDataKeyHash;
+	info.hcxt = TopMemoryContext;
+	hashFlags = (HASH_ELEM | HASH_FUNCTION | HASH_COMPARE | HASH_CONTEXT);
+
+	snapshotHash = hash_create("Snapshot Data Hash", 128, &info, hashFlags);
+
+	forthree(workerCell, workerList,
+			 connectionCell, connectionList,
+			 snapshotIdCell, snapshotIdList)
+	{
+		WorkerNode *workerNode = lfirst(workerCell);
+		MultiConnection *connection = lfirst(connectionCell);
+		StringInfo snapshotId = lfirst(snapshotIdCell);
+		SnapshotDataKey key;
+
+		memcpy(key.hostname, workerNode->workerName, WORKER_LENGTH);
+		key.port = workerNode->workerPort;
+
+		bool found = false;
+		DistibutedSnapshotData *snapshotData = NULL;
+		snapshotData = hash_search(snapshotHash, &key, HASH_ENTER, &found);
+		Assert(!found);
+		snapshotData->connection = connection;
+		strlcpy(snapshotData->snapshotId, snapshotId->data, sizeof(snapshotData->snapshotId));
+	}
+}
+
+
+static List *
+WorkerListConnections(List *workerList)
+{
+	ListCell *workerCell = NULL;
+	List *connectionList = NIL;
+	foreach(workerCell, workerList)
+	{
+		WorkerNode *worker = lfirst(workerCell);
+		MultiConnection *connection = StartNodeConnection(0, worker->workerName,
+														  worker->workerPort);
+		connectionList = lappend(connectionList, connection);
+	}
+
+	FinishConnectionListEstablishment(connectionList);
+
+	return connectionList;
+}
+
+
+static List *
+ConnectionListSnapshotIds(List *connectionList)
+{
+	ListCell *connectionCell = NULL;
+	List *snapshotIdList = NIL;
+	bool raiseInterrupts = true;
+
+	foreach(connectionCell, connectionList)
+	{
+		MultiConnection *connection = lfirst(connectionCell);
+		ClaimConnectionExclusively(connection);
+		if (!SendRemoteCommand(connection,
+							   "begin transaction isolation level repeatable read"))
+		{
+			elog(ERROR, "Sending BEGIN TRANSACTION failed");
+		}
+	}
+
+	foreach(connectionCell, connectionList)
+	{
+		MultiConnection *connection = lfirst(connectionCell);
+		ClearResults(connection, raiseInterrupts);
+		if (!SendRemoteCommand(connection, "SELECT pg_export_snapshot();"))
+		{
+			elog(ERROR, "Sending pg_export_snapshot() failed");
+		}
+	}
+
+	foreach(connectionCell, connectionList)
+	{
+		MultiConnection *connection = lfirst(connectionCell);
+		PGresult *result = GetRemoteCommandResult(connection, raiseInterrupts);
+		StringInfo snapshotId = NULL;
+		if (PQntuples(result) != 1 || PQnfields(result) != 1)
+		{
+			elog(ERROR, "Invalid pg_export_snapshot() result");
+		}
+
+		snapshotId = makeStringInfo();
+		appendStringInfoString(snapshotId, PQgetvalue(result, 0, 0));
+		snapshotIdList = lappend(snapshotIdList, snapshotId);
+		elog(DEBUG2, "snapshotId for %s:%d is %s", connection->hostname,
+			 connection->port, snapshotId->data);
+	}
+
+	return snapshotIdList;
+}
+
+
+static void
+CloseSnapshotConnections(void)
+{
+	HASH_SEQ_STATUS status;
+	DistibutedSnapshotData *snapshotData = NULL;
+
+	hash_seq_init(&status, snapshotHash);
+
+	while ((snapshotData = hash_seq_search(&status)) != NULL)
+	{
+		UnclaimConnection(snapshotData->connection);
+		CloseConnection(snapshotData->connection);
+	}
+}
+
+
+char *
+DistributedSnapshotId(const char *workerName, int port)
+{
+	DistibutedSnapshotData *snapshotData;
+	SnapshotDataKey key;
+	bool found = false;
+
+	memset(key.hostname, 0, sizeof(WORKER_LENGTH));
+	strlcpy(key.hostname, workerName, WORKER_LENGTH);
+	key.port = port;
+
+	snapshotData = hash_search(snapshotHash, &key, HASH_FIND, &found);
+	Assert(found);
+
+	return snapshotData->snapshotId;
 }
 
 
@@ -214,9 +447,21 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 
 			if (CurrentCoordinatedTransactionState == COORD_TRANS_PREPARED)
 			{
+				if (EnableSnapshotIsolation)
+				{
+					AcquireSnapshotIsolationLock();
+				}
+
 				/* handles both already prepared and open transactions */
 				CoordinatedRemoteTransactionsCommit();
+
+				if (EnableSnapshotIsolation)
+				{
+					ReleaseSnapshotIsolationLock();
+				}
 			}
+
+			EndCoordinatedTransaction();
 
 			/* close connections etc. */
 			if (CurrentCoordinatedTransactionState != COORD_TRANS_NONE)
@@ -271,6 +516,8 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			{
 				CoordinatedRemoteTransactionsAbort();
 			}
+
+			EndCoordinatedTransaction();
 
 			/* close connections etc. */
 			if (CurrentCoordinatedTransactionState != COORD_TRANS_NONE)
