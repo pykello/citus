@@ -336,25 +336,40 @@ ConnectionListSnapshotIds(List *connectionList)
 		if (!SendRemoteCommand(connection,
 							   "begin transaction isolation level repeatable read"))
 		{
-			elog(ERROR, "Sending BEGIN TRANSACTION failed");
+			elog(DEBUG2, "Sending BEGIN TRANSACTION failed");
+			CloseConnection(connection);
 		}
 	}
 
 	foreach(connectionCell, connectionList)
 	{
 		MultiConnection *connection = lfirst(connectionCell);
+		if (connection->pgConn == NULL)
+		{
+			continue;
+		}
+
 		ClearResults(connection, raiseInterrupts);
 		if (!SendRemoteCommand(connection, "SELECT pg_export_snapshot();"))
 		{
-			elog(ERROR, "Sending pg_export_snapshot() failed");
+			elog(DEBUG2, "Sending pg_export_snapshot() failed");
+			CloseConnection(connection);
 		}
 	}
 
 	foreach(connectionCell, connectionList)
 	{
 		MultiConnection *connection = lfirst(connectionCell);
-		PGresult *result = GetRemoteCommandResult(connection, raiseInterrupts);
+		PGresult *result = NULL;
 		StringInfo snapshotId = NULL;
+
+		if (connection->pgConn == NULL)
+		{
+			snapshotIdList = lappend(snapshotIdList, "");
+			continue;
+		}
+
+		result = GetRemoteCommandResult(connection, raiseInterrupts);
 		if (PQntuples(result) != 1 || PQnfields(result) != 1)
 		{
 			elog(ERROR, "Invalid pg_export_snapshot() result");
