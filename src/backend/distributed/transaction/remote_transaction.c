@@ -71,13 +71,24 @@ StartRemoteTransactionBegin(struct MultiConnection *connection)
 
 	transaction->transactionState = REMOTE_TRANS_STARTING;
 
-	/*
-	 * Explicitly specify READ COMMITTED, the default on the remote
-	 * side might have been changed, and that would cause problematic
-	 * behaviour.
-	 */
-	appendStringInfoString(beginAndSetDistributedTransactionId,
-						   "BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;");
+	if (EnableSnapshotIsolation)
+	{
+		char *snapshotId = DistributedSnapshotId(connection->hostname, connection->port);
+		appendStringInfoString(beginAndSetDistributedTransactionId,
+							   "BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ;");
+		appendStringInfo(beginAndSetDistributedTransactionId,
+						 "SET TRANSACTION SNAPSHOT '%s';", snapshotId);
+	}
+	else
+	{
+		/*
+		 * Explicitly specify READ COMMITTED, the default on the remote
+		 * side might have been changed, and that would cause problematic
+		 * behaviour.
+		 */
+		appendStringInfoString(beginAndSetDistributedTransactionId,
+							   "BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;");
+	}
 
 	/*
 	 * Append BEGIN and assign_distributed_transaction_id() statements into a single command
@@ -1238,7 +1249,6 @@ FinishRemoteTransactionSavepointRollback(MultiConnection *connection, SubTransac
 	{
 		HandleRemoteTransactionResultError(connection, result, raiseErrors);
 	}
-
 	/* ROLLBACK TO SAVEPOINT succeeded, check if it recovers the transaction */
 	else if (transaction->transactionRecovering)
 	{
